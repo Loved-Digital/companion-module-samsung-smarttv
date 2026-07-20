@@ -1,0 +1,33 @@
+diff --git a/node_modules/samsung-tv-remote/remote.js b/node_modules/samsung-tv-remote/remote.js
+index 6110474..199c663 100644
+--- a/node_modules/samsung-tv-remote/remote.js
++++ b/node_modules/samsung-tv-remote/remote.js
+@@ -254,6 +254,28 @@ _SamsungTvRemote_options = new WeakMap(), _SamsungTvRemote_connectingPromise = n
+                     cleanup();
+                     resolve();
+                 }
++                else if (message.event === 'ms.channel.timeOut') {
++                    // Samsung TVs emit `ms.channel.timeOut` when the handshake stalls (e.g. the
++                    // on-TV authorization prompt wasn't confirmed in time, or the channel went idle).
++                    // Throwing here surfaced as an uncaught error from inside the event handler. Instead,
++                    // tear down the half-open socket and transparently retry the connection a bounded
++                    // number of times, then resolve gracefully so callers never crash on a recoverable timeout.
++                    const retries = (this._handshakeTimeoutRetries = (this._handshakeTimeoutRetries || 0) + 1);
++                    cleanup();
++                    _webSocket.close();
++                    __classPrivateFieldGet(this, _SamsungTvRemote_instances, "m", _SamsungTvRemote_disconnectFromTV).call(this);
++                    if (retries > 3) {
++                        this._handshakeTimeoutRetries = 0;
++                        logger.warn('⚠️ Repeated ms.channel.timeOut during handshake — resolving gracefully without a live connection');
++                        resolve();
++                        return;
++                    }
++                    logger.warn(`⚠️ Received ms.channel.timeOut during handshake — reconnecting (attempt ${retries}/3)...`);
++                    __classPrivateFieldGet(this, _SamsungTvRemote_instances, "m", _SamsungTvRemote_connectToTV).call(this).then(() => {
++                        this._handshakeTimeoutRetries = 0;
++                        resolve();
++                    }, reject);
++                }
+                 else {
+                     throw new Error(`Unexpected handshake message: ${data.toString()}`);
+                 }
