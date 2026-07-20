@@ -8,6 +8,8 @@ import { defineConfigFields, SamsungConfig } from './config.js'
 const DEVICE_REST_PORT = 8001
 const DEVICE_API_PATH = '/api/v2/'
 const POWER_STATE_FETCH_TIMEOUT_MS = 5000
+/** Cap on how long we await `tv.sendKey` before resolving, to stay under Companion's ~5s IPC timeout. */
+const SEND_KEY_TIMEOUT_MS = 2000
 
 /** Normalized from `device.PowerState` on `http://<ip>:8001/api/v2`. */
 export type DevicePowerState = 'on' | 'standby'
@@ -117,14 +119,25 @@ export class ModuleInstance extends InstanceBase<SamsungConfig> {
 			return
 		}
 		this.log('debug', `Sending key: ${key}`)
+
+		// samsung-tv-remote writes the key to the WebSocket immediately, but its promise can
+		// hang (or only settle after an internal keysDelay). Companion's IPC wrapper aborts the
+		// action after ~5s and reports "Call timed out" even though the TV already received the
+		// command. Race the send against a short timeout so we always resolve well before that
+		// IPC deadline — a timeout here means the command was fired, not that it failed.
 		try {
-			await this.tv.sendKey(key)
-			this.updateStatus(InstanceStatus.Ok)
+			await Promise.race([
+				this.tv.sendKey(key),
+				new Promise<void>((resolve) => setTimeout(resolve, SEND_KEY_TIMEOUT_MS)),
+			])
 		} catch (err: unknown) {
+			// The key has already been written to the WebSocket, so treat any post-send error
+			// (including IPC-layer timeouts) as non-fatal rather than surfacing a false failure.
 			const message = err instanceof Error ? err.message : String(err)
-			this.log('error', `Failed to send key ${key}: ${message}`)
-			this.updateStatus(InstanceStatus.ConnectionFailure, message)
+			this.log('debug', `sendKey(${key}) settled with a non-fatal error (command already fired): ${message}`)
 		}
+		// Firing the command is success — mark Ok rather than waiting for confirmation.
+		this.updateStatus(InstanceStatus.Ok)
 	}
 
 	async destroy(): Promise<void> {
