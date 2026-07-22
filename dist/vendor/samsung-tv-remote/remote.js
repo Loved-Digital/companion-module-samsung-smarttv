@@ -190,7 +190,7 @@ _SamsungTvRemote_options = new WeakMap(), _SamsungTvRemote_connectingPromise = n
 }, _SamsungTvRemote_disconnectFromTV = function _SamsungTvRemote_disconnectFromTV() {
     var _a, _b;
     (_a = __classPrivateFieldGet(this, _SamsungTvRemote_webSocket, "f")) === null || _a === void 0 ? void 0 : _a.removeAllListeners();
-    (_b = __classPrivateFieldGet(this, _SamsungTvRemote_webSocket, "f")) === null || _b === void 0 ? void 0 : _b.close();
+    (_b = __classPrivateFieldGet(this, _SamsungTvRemote_webSocket, "f")) === null || _b === void 0 ? void 0 : _b.terminate();
     __classPrivateFieldSet(this, _SamsungTvRemote_webSocket, null, "f");
     __classPrivateFieldSet(this, _SamsungTvRemote_connectingPromise, null, "f");
 }, _SamsungTvRemote_connectToTV = function _SamsungTvRemote_connectToTV() {
