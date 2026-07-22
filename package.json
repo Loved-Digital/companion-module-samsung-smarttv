@@ -8,8 +8,9 @@
 		"format": "prettier -w .",
 		"package": "run build && companion-module-build",
 		"build": "rimraf dist && run build:main",
-		"build:main": "tsc -p tsconfig.build.json",
+		"build:main": "tsc -p tsconfig.build.json && node -e \"require('node:fs').cpSync('src/vendor/samsung-tv-remote', 'dist/vendor/samsung-tv-remote', { recursive: true })\"",
 		"dev": "tsc -p tsconfig.build.json --watch",
+		"test:samsung-key": "node scripts/test-samsung-key.mjs",
 		"lint:raw": "eslint",
 		"lint": "run lint:raw ."
 	},

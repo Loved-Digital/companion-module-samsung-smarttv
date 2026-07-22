@@ -1,0 +1,40 @@
+{
+    "name": "samsung-tv-remote",
+    "version": "3.0.5",
+    "description": "Remote client for Samsung SmartTV starting from 2016",
+    "homepage": "https://github.com/Badisi/samsung-tv-remote",
+    "license": "MIT",
+    "author": {
+        "name": "Badisi"
+    },
+    "type": "commonjs",
+    "main": "index.js",
+    "typings": "index.d.ts",
+    "exports": {
+        ".": {
+            "require": "./index.js",
+            "types": "./index.d.ts",
+            "default": "./index.js"
+        },
+        "./package.json": "./package.json"
+    },
+    "bin": {
+        "samsung-tv-remote": "bin/samsung-tv-remote"
+    },
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/Badisi/samsung-tv-remote"
+    },
+    "keywords": [
+        "samsung",
+        "smarttv",
+        "remote"
+    ],
+    "dependencies": {
+        "wake_on_lan": "^1.0.0",
+        "ws": "^8.20.0"
+    },
+    "optionalDependencies": {
+        "bufferutil": "^4.1.0"
+    }
+}
