@@ -1,23 +1,22 @@
 import { InstanceBase, InstanceStatus, runEntrypoint } from '@companion-module/base';
-import { SamsungTvRemote, Keys, getAwakeSamsungDevices } from './vendor/samsung-tv-remote/index.js';
+import { getAwakeSamsungDevices } from './vendor/samsung-tv-remote/index.js';
 import { updateActions } from './actions.js';
 import { updateVariableDefinitions } from './variables.js';
 import { defineConfigFields } from './config.js';
-/** Port for Samsung REST device info (`/api/v2`), not the WebSocket remote port. */
-const DEVICE_REST_PORT = 8001;
-const DEVICE_API_PATH = '/api/v2/';
-const POWER_STATE_FETCH_TIMEOUT_MS = 5000;
-/** Cap on how long we await `tv.sendKey` before resolving, to stay under Companion's ~5s IPC timeout. */
-const SEND_KEY_TIMEOUT_MS = 2000;
+import { SamsungClient } from './samsung/SamsungClient.js';
 function formatDiscoveredSamsungDevice(device) {
     const friendlyName = device.friendlyName?.trim() || 'Unknown';
     return `${friendlyName} (IP: ${device.ip}, MAC: ${device.mac})`;
 }
 export class ModuleInstance extends InstanceBase {
-    tv;
+    samsungClient;
     config;
     constructor(internal) {
         super(internal);
+        this.samsungClient = new SamsungClient({
+            log: (level, message) => this.log(level, message),
+            onStateChanged: (state) => this.handleClientStateChanged(state),
+        });
     }
     async init(config, _isFirstInit) {
         this.config = config;
@@ -43,92 +42,35 @@ export class ModuleInstance extends InstanceBase {
     }
     establishConnection() {
         this.updateStatus(InstanceStatus.Connecting);
-        if (this.tv) {
-            this.tv.disconnect();
-            this.tv = undefined;
-        }
         if (!this.config.host || !this.config.macAddress) {
+            this.samsungClient.disconnect();
             this.updateStatus(InstanceStatus.BadConfig, 'IP and MAC address are required');
             return;
         }
-        this.log('debug', 'Creating remote for TV at ' + this.config.host);
-        this.tv = new SamsungTvRemote({
-            ip: this.config.host,
-            mac: this.config.macAddress,
-            name: 'Bitfocus Connection',
+        this.samsungClient.connect({
+            host: this.config.host,
+            macAddress: this.config.macAddress,
             port: this.config.port ?? 8002,
         });
-        this.updateStatus(InstanceStatus.Ok);
     }
     /**
      * Reads `device.PowerState` from the TV REST API. Returns `null` if the request fails
      * (e.g. TV fully powered down and not reachable on the network).
      */
     async fetchDevicePowerState() {
-        if (!this.config.host) {
-            return null;
-        }
-        const url = `http://${this.config.host}:${DEVICE_REST_PORT}${DEVICE_API_PATH}`;
-        const controller = new AbortController();
-        const timeout = setTimeout(() => controller.abort(), POWER_STATE_FETCH_TIMEOUT_MS);
-        try {
-            const res = await fetch(url, { signal: controller.signal });
-            if (!res.ok) {
-                this.log('debug', `Device API ${url} returned HTTP ${res.status}`);
-                return null;
-            }
-            const data = (await res.json());
-            const raw = data.device?.PowerState;
-            if (typeof raw !== 'string') {
-                this.log('debug', 'Device API response had no PowerState');
-                return null;
-            }
-            return raw.trim().toLowerCase() === 'on' ? 'on' : 'standby';
-        }
-        catch (err) {
-            const message = err instanceof Error ? err.message : String(err);
-            this.log('debug', `Could not read device power state from ${url}: ${message}`);
-            return null;
-        }
-        finally {
-            clearTimeout(timeout);
-        }
+        return this.samsungClient.fetchDevicePowerState();
     }
     async sendKey(key) {
-        if (!key || !(key in Keys)) {
-            this.log('error', `Cannot send key — invalid or missing key: ${String(key)}`);
-            return;
+        const sendWasAttempted = await this.samsungClient.sendKey(key);
+        if (sendWasAttempted) {
+            this.updateStatus(InstanceStatus.Ok);
         }
-        if (!this.tv) {
-            this.log('error', 'Cannot send key — no TV connection configured');
-            return;
-        }
-        this.log('debug', `Sending key: ${key}`);
-        // samsung-tv-remote writes the key to the WebSocket immediately, but its promise can
-        // hang (or only settle after an internal keysDelay). Companion's IPC wrapper aborts the
-        // action after ~5s and reports "Call timed out" even though the TV already received the
-        // command. Race the send against a short timeout so we always resolve well before that
-        // IPC deadline — a timeout here means the command was fired, not that it failed.
-        try {
-            await Promise.race([
-                this.tv.sendKey(key),
-                new Promise((resolve) => setTimeout(resolve, SEND_KEY_TIMEOUT_MS)),
-            ]);
-        }
-        catch (err) {
-            // The key has already been written to the WebSocket, so treat any post-send error
-            // (including IPC-layer timeouts) as non-fatal rather than surfacing a false failure.
-            const message = err instanceof Error ? err.message : String(err);
-            this.log('debug', `sendKey(${key}) settled with a non-fatal error (command already fired): ${message}`);
-        }
-        // Firing the command is success — mark Ok rather than waiting for confirmation.
-        this.updateStatus(InstanceStatus.Ok);
+    }
+    async wakeAndReconnect() {
+        await this.samsungClient.wakeAndReconnect();
     }
     async destroy() {
-        if (this.tv) {
-            this.tv.disconnect();
-            this.tv = undefined;
-        }
+        this.samsungClient.dispose();
     }
     async configUpdated(config) {
         const needsReconnect = config.host !== this.config.host ||
@@ -147,6 +89,12 @@ export class ModuleInstance extends InstanceBase {
     }
     updateVariableDefinitions() {
         updateVariableDefinitions(this);
+    }
+    handleClientStateChanged(state) {
+        if (state === 'connecting')
+            this.updateStatus(InstanceStatus.Connecting);
+        if (state === 'ready')
+            this.updateStatus(InstanceStatus.Ok);
     }
 }
 runEntrypoint(ModuleInstance, []);

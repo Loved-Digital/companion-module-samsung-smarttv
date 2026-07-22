@@ -1,6 +1,5 @@
 import { Keys } from './vendor/samsung-tv-remote/index.js';
 const KEY_CHOICES = Object.keys(Keys).map((key) => ({ label: key, id: key }));
-const WAKE_RECONNECT_DELAY_MS = 5000;
 export function updateActions(self) {
     self.setActionDefinitions({
         power: {
@@ -30,23 +29,7 @@ export function updateActions(self) {
                         return;
                     }
                     // API unreachable, fall back to Wake-on-LAN.
-                    if (!self.tv) {
-                        self.log('error', 'No TV connection configured');
-                        return;
-                    }
-                    self.log('debug', 'Could not read PowerState from device API; sending Wake-on-LAN to: ' + self.config.macAddress);
-                    try {
-                        await self.tv.wakeTV();
-                    }
-                    catch (err) {
-                        const message = err instanceof Error ? err.message : String(err);
-                        self.log('error', 'Wake-on-LAN failed: ' + message);
-                        return;
-                    }
-                    self.log('debug', 'Waiting for TV to boot...');
-                    await new Promise((resolve) => setTimeout(resolve, WAKE_RECONNECT_DELAY_MS));
-                    self.log('debug', 'Re-establishing WebSocket connection...');
-                    self.establishConnection();
+                    await self.wakeAndReconnect();
                 }
                 else {
                     if (powerState !== 'on') {
