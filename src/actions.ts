@@ -1,4 +1,4 @@
-import { Keys } from 'samsung-tv-remote'
+import { Keys } from './vendor/samsung-tv-remote/index.js'
 import type { ModuleInstance } from './index.js'
 
 const KEY_CHOICES = Object.keys(Keys).map((key) => ({ label: key, id: key }))

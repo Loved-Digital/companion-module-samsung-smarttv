@@ -1,5 +1,5 @@
 import { InstanceBase, InstanceStatus, runEntrypoint, SomeCompanionConfigField } from '@companion-module/base'
-import { SamsungTvRemote, Keys, getAwakeSamsungDevices, type SamsungDevice } from 'samsung-tv-remote'
+import { SamsungTvRemote, Keys, getAwakeSamsungDevices, type SamsungDevice } from './vendor/samsung-tv-remote/index.js'
 import { updateActions } from './actions.js'
 import { updateVariableDefinitions } from './variables.js'
 import { defineConfigFields, SamsungConfig } from './config.js'

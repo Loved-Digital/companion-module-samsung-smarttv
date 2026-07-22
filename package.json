@@ -20,11 +20,13 @@
 	},
 	"dependencies": {
 		"@companion-module/base": "~1.12.1",
-		"samsung-tv-remote": "^3.0.5"
+		"wake_on_lan": "^1.0.0",
+		"ws": "^8.20.0"
 	},
 	"devDependencies": {
 		"@companion-module/tools": "^2.7.2",
 		"@types/node": "^22.19.18",
+		"@types/ws": "^8",
 		"eslint": "^9.39.4",
 		"husky": "^9.1.7",
 		"lint-staged": "^16.4.0",
